@@ -21,7 +21,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        'path', help='path to the dataset folder containing rgb/ and depth/')
+        '--path', help='path to the dataset folder containing rgb/ and depth/',
+        default='C:\CMU_Spring\SLAM_HW_ICP\living_room_traj2_frei_png')
     parser.add_argument('--start_idx',
                         type=int,
                         help='index to the source depth/normal maps',
@@ -33,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--downsample_factor', type=int, default=2)
     args = parser.parse_args()
 
-    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('intrinsics.json')
+    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('code\intrinsics.json')
     intrinsic = np.array(intrinsic_struct.intrinsic_matrix)
     indices, gt_poses = load_gt_poses(
         os.path.join(args.path, 'livingRoom2.gt.freiburg'))

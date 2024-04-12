@@ -36,7 +36,67 @@ class Map:
         \return None, update map properties IN PLACE
         '''
 
+        # Transforming the input points and normals to the map coordinate system
+        t_points = (R @ points.T + t).T
+        t_normals = (R @ normals.T).T
 
+        cur_points = self.points[indices] 
+        cur_normals = self.normals[indices]
+        cur_weights = self.weights[indices]
+        
+        # P and Q are the points and normals of the current map and the input map, c is confidence control / weights
+        p = cur_points
+        q = t_points
+        n_p = cur_normals
+        n_q = t_normals
+        c = cur_weights
+        alpha = np.ones_like(c)
+
+
+        # Updating p
+        p = ((c * p) + alpha * q) / (alpha+c)
+
+        # Updating n_p
+        n_p = ((c * n_p) + alpha * n_q) / (alpha+c)
+
+        # Normalizing n_p
+        n_p = n_p / np.linalg.norm(n_p, axis=1)[:, None]
+
+        # Updating c
+        c = c + alpha
+
+        # Assigning the updated values
+
+        self.points[indices] = p
+        self.normals[indices] = n_p
+        self.weights[indices] = c
+
+        pass
+
+    def add_naive(self, points, normals, colors, R, t):
+        '''
+        TODO: implement the add function
+        \param self The current maintained map
+        \param points Input associated points, (N, 3)
+        \param normals Input associated normals, (N, 3)
+        \param colors Input associated colors, (N, 3)
+        \param R rotation from camera (input) to world (map), (3, 3)
+        \param t translation from camera (input) to world (map), (3, )
+        \return None, update map properties by concatenation
+        '''
+
+        # Transforming the input points and normals to the map coordinate system
+        t_points = (R @ points.T + t).T
+        t_normals = (R @ normals.T).T
+
+        # Concatenating the input points, normals, colors to the current map
+        self.points = np.concatenate((self.points, t_points))
+        self.normals = np.concatenate((self.normals, t_normals))
+        self.colors = np.concatenate((self.colors, colors))
+
+        # Assigning the weights
+        new_weights = np.ones((len(points), 1))
+        self.weights = np.concatenate((self.weights, new_weights))
 
         pass
 
@@ -51,7 +111,26 @@ class Map:
         \param t translation from camera (input) to world (map), (3, )
         \return None, update map properties by concatenation
         '''
+        # This method is similar to the naive method but we will now check for association of the points
+        # with the current map and then add the points to the map
+
+        # Transforming the input points and normals to the map coordinate system
+        t_points = (R @ points.T + t).T
+        t_normals = (R @ normals.T).T
+
+        # Select unnassociated points
+        # q, nq, p , np
+        q = t_points
+        n_q = t_normals
+        p = self.points
+        n_p = self.normals
+
+        
+
+
         pass
+
+
 
     def filter_pass1(self, us, vs, ds, h, w):
         '''
@@ -89,6 +168,7 @@ class Map:
         dist = np.linalg.norm(points - input_points, axis=1)
         valid_dist = dist < dist_diff
         angle_threshold = np.cos(np.deg2rad(angle_diff))
+        # angle_threshold = np.cos(angle_diff)
         angle_dif = np.sum(normals * input_normals, axis=1)
         valid_angle = angle_dif > angle_threshold
 
@@ -128,7 +208,7 @@ class Map:
             colors = color_map.reshape((-1, 3))
 
             # TODO: add step
-            self.add(points, normals, colors, R, t)
+            self.add_naive(points, normals, colors, R, t)
             self.initialized = True
 
         else:
@@ -190,7 +270,7 @@ class Map:
             new_colors = color_map[~associated_mask]
 
             # TODO: Add step
-            self.add(new_points, new_normals, new_colors, R, t)
+            self.add_naive(new_points, new_normals, new_colors, R, t)
             # End of TODO
 
             added_entries = len(new_points)
@@ -202,7 +282,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        'path', help='path to the dataset folder containing rgb/ and depth/')
+        '--path', help='path to the dataset folder containing rgb/ and depth/',
+        default='C:\CMU_Spring\SLAM_HW_ICP\living_room_traj2_frei_png')
     parser.add_argument('--start_idx',
                         type=int,
                         help='index to the source depth/normal maps',
@@ -214,7 +295,7 @@ if __name__ == '__main__':
     parser.add_argument('--downsample_factor', type=int, default=2)
     args = parser.parse_args()
 
-    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('intrinsics.json')
+    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('code\intrinsics.json')
     intrinsic = np.array(intrinsic_struct.intrinsic_matrix)
     indices, gt_poses = load_gt_poses(
         os.path.join(args.path, 'livingRoom2.gt.freiburg'))
