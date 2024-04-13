@@ -60,7 +60,7 @@ class Map:
         n_p = ((c * n_p) + alpha * n_q) / (alpha+c)
 
         # Normalizing n_p
-        n_p = n_p / np.linalg.norm(n_p, axis=1)[:, None]
+        n_p = n_p / np.linalg.norm(n_p, axis=1).reshape(-1, 1)
 
         # Updating c
         c = c + alpha
@@ -73,7 +73,7 @@ class Map:
 
         pass
 
-    def add_naive(self, points, normals, colors, R, t):
+    def add(self, points, normals, colors, R, t):
         '''
         TODO: implement the add function
         \param self The current maintained map
@@ -100,35 +100,6 @@ class Map:
 
         pass
 
-    def add(self, points, normals, colors, R, t):
-        '''
-        TODO: implement the add function
-        \param self The current maintained map
-        \param points Input associated points, (N, 3)
-        \param normals Input associated normals, (N, 3)
-        \param colors Input associated colors, (N, 3)
-        \param R rotation from camera (input) to world (map), (3, 3)
-        \param t translation from camera (input) to world (map), (3, )
-        \return None, update map properties by concatenation
-        '''
-        # This method is similar to the naive method but we will now check for association of the points
-        # with the current map and then add the points to the map
-
-        # Transforming the input points and normals to the map coordinate system
-        t_points = (R @ points.T + t).T
-        t_normals = (R @ normals.T).T
-
-        # Select unnassociated points
-        # q, nq, p , np
-        q = t_points
-        n_q = t_normals
-        p = self.points
-        n_p = self.normals
-
-        
-
-
-        pass
 
 
 
@@ -165,10 +136,10 @@ class Map:
         \return mask (N, 1) in bool indicating the valid correspondences
         '''
         mask = np.zeros((len(points))).astype(bool)
-        dist = np.linalg.norm(points - input_points, axis=1)
+        dist = np.linalg.norm(input_points - points, axis=1)
         valid_dist = dist < dist_diff
-        angle_threshold = np.cos(np.deg2rad(angle_diff))
-        # angle_threshold = np.cos(angle_diff)
+        # angle_threshold = np.cos(np.deg2rad(angle_diff))
+        angle_threshold = np.cos(angle_diff)
         angle_dif = np.sum(normals * input_normals, axis=1)
         valid_angle = angle_dif > angle_threshold
 
@@ -208,7 +179,7 @@ class Map:
             colors = color_map.reshape((-1, 3))
 
             # TODO: add step
-            self.add_naive(points, normals, colors, R, t)
+            self.add(points, normals, colors, R, t)
             self.initialized = True
 
         else:
@@ -270,7 +241,7 @@ class Map:
             new_colors = color_map[~associated_mask]
 
             # TODO: Add step
-            self.add_naive(new_points, new_normals, new_colors, R, t)
+            self.add(new_points, new_normals, new_colors, R, t)
             # End of TODO
 
             added_entries = len(new_points)
