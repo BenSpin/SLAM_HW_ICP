@@ -21,6 +21,7 @@ class Map:
         self.normals = np.empty((0, 3))
         self.colors = np.empty((0, 3))
         self.weights = np.empty((0, 1))
+        self.last_updated = np.empty((0, 1)) # for filtering
         self.initialized = False
 
     def merge(self, indices, points, normals, colors, R, t):
@@ -43,6 +44,7 @@ class Map:
         cur_points = self.points[indices] 
         cur_normals = self.normals[indices]
         cur_weights = self.weights[indices]
+        cur_colors = self.colors[indices]
         
         # P and Q are the points and normals of the current map and the input map, c is confidence control / weights
         p = cur_points
@@ -50,17 +52,24 @@ class Map:
         n_p = cur_normals
         n_q = t_normals
         c = cur_weights
+        r =  cur_colors
+
         alpha = np.ones_like(c)
 
 
         # Updating p
         p = ((c * p) + alpha * q) / (alpha+c)
 
+        # Updating colors
+        r = ((c * r) + alpha * colors) / (alpha+c)
+
         # Updating n_p
         n_p = ((c * n_p) + alpha * n_q) / (alpha+c)
 
         # Normalizing n_p
         n_p = n_p / np.linalg.norm(n_p, axis=1).reshape(-1, 1)
+
+        
 
         # Updating c
         c = c + alpha
@@ -70,10 +79,11 @@ class Map:
         self.points[indices] = p
         self.normals[indices] = n_p
         self.weights[indices] = c
+        self.colors[indices] = r
 
         pass
 
-    def add(self, points, normals, colors, R, t):
+    def add(self, points, normals, colors, R, t, current_frame_index=0):
         '''
         TODO: implement the add function
         \param self The current maintained map
@@ -97,6 +107,9 @@ class Map:
         # Assigning the weights
         new_weights = np.ones((len(points), 1))
         self.weights = np.concatenate((self.weights, new_weights))
+
+        # Assigning the last updated frame index
+        self.last_updated = np.concatenate((self.last_updated, np.full((len(points), 1), current_frame_index)))
 
         pass
 
@@ -147,6 +160,18 @@ class Map:
 
 
         return mask
+    
+    def remove_dormant_points(self, indices):
+        '''
+        \param self The current maintained map
+        \param indices Indices of dormant points to be removed
+        '''
+
+        self.points = np.delete(self.points, indices, axis=0)
+        self.normals = np.delete(self.normals, indices, axis=0)
+        self.colors = np.delete(self.colors, indices, axis=0)
+        self.weights = np.delete(self.weights, indices, axis=0)
+        self.last_updated = np.delete(self.last_updated, indices, axis=0)
 
     def fuse(self,
              vertex_map,
@@ -155,7 +180,8 @@ class Map:
              intrinsic,
              T,
              dist_diff=0.03,
-             angle_diff=np.deg2rad(5)):
+             angle_diff=np.deg2rad(5),
+             current_frame_index=0):
         '''
         \param self The current maintained map
         \param vertex_map Input vertex map, (H, W, 3)
@@ -240,8 +266,19 @@ class Map:
             new_normals = normal_map[~associated_mask]
             new_colors = color_map[~associated_mask]
 
+            # Keeping track of the last updated frame index for dormant point removal
+            if indices.size > 0:
+                # print(indices)
+                self.last_updated[indices] = current_frame_index
+
+            # Removing dormant points if they have not been updated for some frame count
+            dormant_indices = np.where(current_frame_index - self.last_updated > 10)[0]
+            if len(dormant_indices) > 0:
+                self.remove_dormant_points(dormant_indices)
+                print('Removed {} dormant points'.format(len(dormant_indices)))
+
             # TODO: Add step
-            self.add(new_points, new_normals, new_colors, R, t)
+            self.add(new_points, new_normals, new_colors, R, t, current_frame_index=current_frame_index)
             # End of TODO
 
             added_entries = len(new_points)
@@ -299,7 +336,7 @@ if __name__ == '__main__':
         source_normal_map = source_normal_map[::down_factor, ::down_factor]
 
         m.fuse(source_vertex_map, source_normal_map, source_color_map,
-               intrinsic, gt_poses[i])
+               intrinsic, gt_poses[i] , current_frame_index=i)
 
     global_pcd = o3d_utility.make_point_cloud(m.points,
                                               colors=m.colors,

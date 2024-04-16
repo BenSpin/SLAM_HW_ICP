@@ -85,7 +85,7 @@ if __name__ == '__main__':
                                  debug_association=False)
             T_cam_to_world = np.linalg.inv(T_world_to_cam)
         print('Point-based fusion')
-        m.fuse(vertex_map, normal_map, color_map, intrinsic, T_cam_to_world)
+        m.fuse(vertex_map, normal_map, color_map, intrinsic, T_cam_to_world, current_frame_index=i)
 
         # A shift is required as gt starts from 1
         T_gt.append(gt_poses[i - 1])
